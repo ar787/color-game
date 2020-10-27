@@ -1,59 +1,48 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Btn from "../Btn";
 import {copyArray, generateRenderData} from "../../helpers";
 
-class BtnContainer extends React.PureComponent {
-  constructor() {
-    super();
+function usePrevious(value) {
+  const ref = useRef();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current === undefined ? value : ref.current;
+}
 
-    this.state = {
-      colors: [],
-      selectedColor: '',
-    }
-  }
+async function getData() {
+  const response = await fetch('data.json');
+  const data = await response.json();
+  return data
+}
 
-  async componentDidMount() {
-    const response = await fetch('data.json');
-    const data = await response.json();
+function BtnContainer (props) {
+  const [colors, setColors] = useState([])
+  const [MAX_COUNT, setMAX_COUNT] =useState(0)  
+  const [selectedColor, setSelectedColor] = useState("")
+  const [active, setActive] = useState(false)
+  const [selectedElement, setSelectedElement] = useState(null)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const prev = usePrevious(selectedColor)
+  useEffect(() => {
+    getData().then(data => {
+      setColors(data.colors)
+      setMAX_COUNT(data.maxCount)
+    })
+  }, [])
+  
+  useEffect(() => {   
+    if (prev !== selectedColor) {
+        let status = true
 
-    this.MAX_COUNT = data.maxCount;
-    this.setState({colors: data.colors});
-  }
-
-  handleClick = (index) => {
-    const colors = copyArray(this.state.colors);
-    const clickedColorsArray = colors[index];
-    const clickedColor = clickedColorsArray[clickedColorsArray.length - 1];
-
-    if (!this.state.selectedColor) {
-      clickedColorsArray.pop();
-      this.setState({
-        selectedColor: clickedColor,
-        colors,
-      });
-
-      return;
-    }
-
-    if (clickedColorsArray.length < this.MAX_COUNT && (!clickedColor || this.state.selectedColor === clickedColor)) {
-      clickedColorsArray.push(this.state.selectedColor);
-      this.setState({
-        selectedColor: '',
-        colors
-      });
-    }
-  }
-
-  componentDidUpdate(prevProps, prevState) {
-    if (prevState.selectedColor !== this.state.selectedColor) {
-      let status = true;
-
-      this.state.colors.forEach((colors) => {
+        colors.forEach((colors) => {
         if (colors.length) {
-          if (colors.length === this.MAX_COUNT) {
+          
+          if (colors.length === MAX_COUNT) {
             const uniqueObj = new Set();
             colors.forEach((color) => uniqueObj.add(color));
             if (uniqueObj.size !== 1) status = false;
+            
             return;
           }
 
@@ -62,30 +51,61 @@ class BtnContainer extends React.PureComponent {
       })
 
       if (status) {
-        this.props.setFinished();
+        props.setFinished();
       }
+   
+    }
+  }, [selectedColor])
+  
+  function handleClick (index) {
+    const colorsCopy = copyArray(colors);
+    const clickedColorsArray = colorsCopy[index];
+    const clickedColor = clickedColorsArray[clickedColorsArray.length - 1];
+
+
+    if (!selectedColor) {
+      let el = clickedColorsArray.pop();
+      setColors(colorsCopy);
+      setSelectedColor(clickedColor);
+      setActive(true)
+      setSelectedElement(el)
+      setSelectedIndex(index)
+      return;
+    }
+
+    if (clickedColorsArray.length < MAX_COUNT && (!clickedColor || selectedColor === clickedColor)) {
+      clickedColorsArray.push(selectedColor);
+      setSelectedColor("");
+      setColors(colorsCopy);
+      setActive(false)
+      props.setSteps(props.steps + 1) 
     }
   }
 
-  render() {
-    const colors = generateRenderData(this.state.colors, this.MAX_COUNT);
-
-    return (
-      <>
-        <Btn color={this.state.selectedColor} className="btn-selected"/>
-
-        <div className="game-container">
-          {colors.map((colors, i) => (
-            <div key={i} className="btn-container" onClick={() => this.handleClick(i)}>
-              {colors.map((color, j) => (
-                <Btn key={j} color={color}/>
-              ))}
-            </div>
-          ))}
-        </div>
-      </>
-    )
+  function reset() {
+    const colorsCopy = copyArray(colors);
+    colorsCopy[selectedIndex].push(selectedElement)
+    setColors(colorsCopy)
+    setSelectedColor("")
+    setActive(false)
   }
+
+  const colorsGenerate = generateRenderData(colors, MAX_COUNT);
+  return(
+    <>
+      <Btn color={selectedColor} className="btn-selected"/>
+        {active ? <button onClick={reset}>reset</button> : null } 
+      <div className="game-container">
+        {colorsGenerate.map((colors, i) => (
+          <div key={i} className="btn-container" onClick={() => handleClick(i)}>
+            {colors.map((color, j) => (
+              <Btn key={j} color={color}/>
+            ))}
+          </div>
+        ))}
+      </div>
+    </>
+  )
 }
 
 export default BtnContainer;
